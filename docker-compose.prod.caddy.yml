@@ -85,6 +85,8 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
     container_name: epay-frontend
     restart: unless-stopped
     depends_on:

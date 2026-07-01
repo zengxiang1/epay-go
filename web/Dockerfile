@@ -4,6 +4,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+RUN npm config set registry ${NPM_REGISTRY}
+
 # 复制 package.json
 COPY package*.json ./
 RUN npm ci
