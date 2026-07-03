@@ -38,6 +38,7 @@ type HuifuConfig struct {
 type HuifuAdapter struct {
 	config     *HuifuConfig
 	family     string // 承接方式: wechat / alipay，由注册的插件写死注入
+	baseURL    string // 汇付 API host，默认 huifuAPIHost，测试可覆盖
 	privateKey *rsa.PrivateKey
 	publicKey  *rsa.PublicKey
 	httpClient *http.Client
@@ -71,6 +72,7 @@ func newHuifuAdapter(configJSON json.RawMessage, family string) (PaymentAdapter,
 	return &HuifuAdapter{
 		config:     &cfg,
 		family:     family,
+		baseURL:    huifuAPIHost,
 		privateKey: priv,
 		publicKey:  pub,
 		httpClient: &http.Client{Timeout: 15 * time.Second},
@@ -161,7 +163,7 @@ func (h *HuifuAdapter) doRequest(ctx context.Context, path string, data map[stri
 		return err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, huifuAPIHost+path, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, h.baseURL+path, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -347,10 +349,11 @@ func (h *HuifuAdapter) Refund(ctx context.Context, req *RefundRequest) (*RefundR
 	}
 
 	data := map[string]interface{}{
-		"req_date":       time.Now().Format("20060102"),
-		"req_seq_id":     req.RefundNo,
-		"huifu_id":       h.config.HuifuID,
-		"ord_amt":        req.TotalAmount.StringFixed(2),
+		"req_date":   time.Now().Format("20060102"),
+		"req_seq_id": req.RefundNo,
+		"huifu_id":   h.config.HuifuID,
+		// 汇付 ord_amt 表示【本次退款金额】，不是原订单总额；传错会导致按原订单全额退款
+		"ord_amt":        req.Amount.StringFixed(2),
 		"org_req_date":   orgReqDate,
 		"org_req_seq_id": req.TradeNo,
 		"remark":         req.RefundDesc,

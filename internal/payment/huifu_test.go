@@ -237,3 +237,61 @@ func TestHuifuSignVerifyRoundTrip(t *testing.T) {
 		t.Fatal("tampered signature should fail verification, but ParseNotify succeeded")
 	}
 }
+
+// TestHuifuRefundAmount 回归测试：汇付退款必须把【本次退款金额】传给 ord_amt，
+// 而不是原订单总额——传错会导致按原订单全额退款（真实资金事故）。
+func TestHuifuRefundAmount(t *testing.T) {
+	merchPriv, merchPub := genPEMPair(t)
+	cfg := HuifuConfig{
+		SysID: "s", ProductID: "p", HuifuID: "6666000000000000",
+		MerchantPrivateKey: merchPriv, HuifuPublicKey: merchPub,
+	}
+	cfgJSON, _ := json.Marshal(cfg)
+	adapter, err := NewHuifuAlipayAdapter(cfgJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := adapter.(*HuifuAdapter)
+
+	var gotOrdAmt string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var envelope struct {
+			Data json.RawMessage `json:"data"`
+			Sign string          `json:"sign"`
+		}
+		json.NewDecoder(r.Body).Decode(&envelope)
+		if err := h.verify(envelope.Data, envelope.Sign); err != nil {
+			t.Errorf("request sign verify failed: %v", err)
+		}
+		var d map[string]interface{}
+		json.Unmarshal(envelope.Data, &d)
+		gotOrdAmt, _ = d["ord_amt"].(string)
+
+		respData, _ := json.Marshal(map[string]interface{}{
+			"resp_code": "00000000", "resp_desc": "成功", "trans_stat": "S",
+		})
+		respSign, _ := h.sign(respData)
+		body, _ := json.Marshal(map[string]interface{}{"data": json.RawMessage(respData), "sign": respSign})
+		w.Write(body)
+	}))
+	defer srv.Close()
+	h.baseURL = srv.URL
+
+	// 原订单总额 0.06，本次只退 0.01
+	resp, err := h.Refund(context.Background(), &RefundRequest{
+		TradeNo:     "20260701120000abcd1234",
+		RefundNo:    "R001",
+		TotalAmount: decimal.NewFromFloat(0.06),
+		Amount:      decimal.NewFromFloat(0.01),
+		RefundDesc:  "部分退款",
+	})
+	if err != nil {
+		t.Fatalf("Refund failed: %v", err)
+	}
+	if resp.Status != "success" {
+		t.Fatalf("refund status = %s, want success", resp.Status)
+	}
+	if gotOrdAmt != "0.01" {
+		t.Fatalf("ord_amt 传给汇付的是 %q，应为本次退款金额 0.01（若为 0.06 则会全额退款）", gotOrdAmt)
+	}
+}
