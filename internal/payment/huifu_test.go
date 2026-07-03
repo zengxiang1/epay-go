@@ -43,17 +43,20 @@ func TestHuifuSignVerifyRoundTrip(t *testing.T) {
 		SysID:              "test_sys",
 		ProductID:          "test_product",
 		HuifuID:            "6666000000000000",
-		ChannelFamily:      "wechat",
 		MerchantPrivateKey: merchPriv,
 		HuifuPublicKey:     merchPub, // 自签自验，只测闭环正确性，不代表真实汇付公钥
 	}
 	cfgJSON, _ := json.Marshal(cfg)
 
-	adapter, err := NewHuifuAdapter(cfgJSON)
+	// 微信承接插件（hf-wxpay）
+	adapter, err := NewHuifuWechatAdapter(cfgJSON)
 	if err != nil {
-		t.Fatalf("NewHuifuAdapter failed: %v", err)
+		t.Fatalf("NewHuifuWechatAdapter failed: %v", err)
 	}
 	h := adapter.(*HuifuAdapter)
+	if h.family != "wechat" {
+		t.Fatalf("family = %q, want wechat", h.family)
+	}
 
 	// 起一个假的汇付服务端：验证请求签名，再用同一把私钥签名返回数据
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

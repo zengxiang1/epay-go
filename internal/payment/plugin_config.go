@@ -34,9 +34,10 @@ type PayTypeOption struct {
 // GetPluginConfigs 获取所有插件配置模板
 func GetPluginConfigs() map[string]PluginConfig {
 	return map[string]PluginConfig{
-		"alipay": GetAlipayConfig(),
-		"wechat": GetWechatConfig(),
-		"huifu":  GetHuifuConfig(),
+		"alipay":    GetAlipayConfig(),
+		"wechat":    GetWechatConfig(),
+		"hf-wxpay":  GetHuifuWechatConfig(),
+		"hf-alipay": GetHuifuAlipayConfig(),
 	}
 }
 
@@ -178,68 +179,77 @@ func GetWechatConfig() PluginConfig {
 	}
 }
 
-// GetHuifuConfig 汇付天下（斗拱平台）配置模板
-func GetHuifuConfig() PluginConfig {
+// huifuCommonInputs 汇付两个插件共用的商户凭证字段
+func huifuCommonInputs() []PluginConfigField {
+	return []PluginConfigField{
+		{
+			Key:         "sys_id",
+			Name:        "系统接入号",
+			Type:        "input",
+			Required:    true,
+			Placeholder: "请输入汇付分配的系统接入号(system_id)",
+		},
+		{
+			Key:         "product_id",
+			Name:        "产品号",
+			Type:        "input",
+			Required:    true,
+			Placeholder: "请输入产品号(product_id)",
+		},
+		{
+			Key:         "huifu_id",
+			Name:        "商户号",
+			Type:        "input",
+			Required:    true,
+			Placeholder: "请输入汇付商户号(huifu_id)",
+		},
+		{
+			Key:         "rsa_merchant_private_key",
+			Name:        "商户私钥",
+			Type:        "textarea",
+			Required:    true,
+			Placeholder: "请粘贴商户RSA私钥(PKCS8格式) PEM 内容",
+			Note:        "用于对请求参数进行 RSA-SHA256 签名",
+		},
+		{
+			Key:         "rsa_huifu_public_key",
+			Name:        "汇付公钥",
+			Type:        "textarea",
+			Required:    true,
+			Placeholder: "请粘贴汇付平台公钥 PEM 内容",
+			Note:        "用于验证汇付返回及异步通知的签名",
+		},
+	}
+}
+
+// GetHuifuWechatConfig 汇付天下-微信 配置模板（插件 hf-wxpay）
+func GetHuifuWechatConfig() PluginConfig {
 	return PluginConfig{
-		Name:     "huifu",
-		ShowName: "汇付天下（斗拱平台）",
+		Name:     "hf-wxpay",
+		ShowName: "汇付天下（微信）",
 		Author:   "汇付天下",
 		Link:     "https://paas.huifu.com",
-		Inputs: []PluginConfigField{
-			{
-				Key:         "sys_id",
-				Name:        "系统接入号",
-				Type:        "input",
-				Required:    true,
-				Placeholder: "请输入汇付分配的系统接入号(system_id)",
-			},
-			{
-				Key:         "product_id",
-				Name:        "产品号",
-				Type:        "input",
-				Required:    true,
-				Placeholder: "请输入产品号(product_id)",
-			},
-			{
-				Key:         "huifu_id",
-				Name:        "商户号",
-				Type:        "input",
-				Required:    true,
-				Placeholder: "请输入汇付商户号(huifu_id)",
-			},
-			{
-				Key:      "channel_family",
-				Name:     "承接方式",
-				Type:     "select",
-				Required: true,
-				Options: map[string]string{
-					"wechat": "微信",
-					"alipay": "支付宝",
-				},
-				Note: "汇付一个商户号可同时承接微信/支付宝，本插件按此项决定内部走哪条通道；如两种都要，请分别新建两个汇付通道。",
-			},
-			{
-				Key:         "rsa_merchant_private_key",
-				Name:        "商户私钥",
-				Type:        "textarea",
-				Required:    true,
-				Placeholder: "请粘贴商户RSA私钥(PKCS8格式) PEM 内容",
-				Note:        "用于对请求参数进行 RSA-SHA256 签名",
-			},
-			{
-				Key:         "rsa_huifu_public_key",
-				Name:        "汇付公钥",
-				Type:        "textarea",
-				Required:    true,
-				Placeholder: "请粘贴汇付平台公钥 PEM 内容",
-				Note:        "用于验证汇付返回及异步通知的签名",
-			},
-		},
+		Inputs:   huifuCommonInputs(),
 		PayTypes: []PayTypeOption{
 			{Code: "scan", Name: "扫码支付"},
-			{Code: "jsapi", Name: "JS调起支付（仅微信承接）"},
-			{Code: "h5", Name: "H5支付（仅微信承接）"},
+			{Code: "jsapi", Name: "JS调起支付"},
+			{Code: "h5", Name: "H5支付"},
 		},
-		Note: "支付宝承接方式下暂只支持扫码支付；JSAPI/H5 目前仅微信承接方式支持。",
+		Note: "汇付-微信承接：用于处理微信支付，客户端下单传 type=wxpay 即可路由到本通道。",
+	}
+}
+
+// GetHuifuAlipayConfig 汇付天下-支付宝 配置模板（插件 hf-alipay）
+func GetHuifuAlipayConfig() PluginConfig {
+	return PluginConfig{
+		Name:     "hf-alipay",
+		ShowName: "汇付天下（支付宝）",
+		Author:   "汇付天下",
+		Link:     "https://paas.huifu.com",
+		Inputs:   huifuCommonInputs(),
+		PayTypes: []PayTypeOption{
+			{Code: "scan", Name: "扫码支付"},
+		},
+		Note: "汇付-支付宝承接：用于处理支付宝支付，客户端下单传 type=alipay 即可路由到本通道；当前仅支持扫码。",
 	}
 }
